@@ -18,6 +18,8 @@
 
 #include <phNfcNciConstants.h>
 
+#include <algorithm>
+
 using namespace std;
 
 /*****************************************************************************
