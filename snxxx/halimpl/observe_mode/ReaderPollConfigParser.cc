@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 NXP
+ * Copyright 2024-2025 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <algorithm>
 
 using namespace std;
+uint8_t ReaderPollConfigParser::lastKnownGain = 0x00;
+uint8_t ReaderPollConfigParser::lastKnownModEvent = 0x00;
 
 /*****************************************************************************
  *
@@ -47,6 +49,11 @@ vector<uint8_t> ReaderPollConfigParser::getWellKnownModEventData(
   eventData.push_back(gain);
   eventData.insert(std::end(eventData), std::begin(data), std::end(data));
   return eventData;
+}
+
+void ReaderPollConfigParser::resetLastKnownValues() {
+  ReaderPollConfigParser::lastKnownGain = 0x00;
+  ReaderPollConfigParser::lastKnownModEvent = 0x00;
 }
 
 /*****************************************************************************
@@ -118,27 +125,24 @@ vector<uint8_t> ReaderPollConfigParser::getRFEventData(
  ***************************************************************************/
 vector<uint8_t> ReaderPollConfigParser::parseCmaEvent(vector<uint8_t> p_event) {
   vector<uint8_t> event_data = vector<uint8_t>();
-  if (lastKnownModEvent == EVENT_MOD_B && p_event.size() > 0 &&
+  if (ReaderPollConfigParser::lastKnownModEvent == EVENT_MOD_B &&
+      p_event.size() > 0 &&
       p_event[0] == TYPE_B_APF) {  // Type B Apf value is 0x05
     if (this->notificationType != TYPE_ONLY_MOD_EVENTS) {
-      event_data =
-          getWellKnownModEventData(TYPE_MOD_B, std::move(unknownEventTimeStamp),
-                                   lastKnownGain, std::move(p_event));
+      event_data = getWellKnownModEventData(
+          TYPE_MOD_B, std::move(unknownEventTimeStamp),
+          ReaderPollConfigParser::lastKnownGain, std::move(p_event));
     }
-  } else if (lastKnownModEvent == EVENT_MOD_F &&
-             p_event[0] == TYPE_F_CMD_LENGH && p_event[2] == TYPE_F_ID &&
-             p_event[3] == TYPE_F_ID) {
-    if (this->notificationType != TYPE_ONLY_MOD_EVENTS) {
-      event_data =
-          getWellKnownModEventData(TYPE_MOD_F, std::move(unknownEventTimeStamp),
-                                   lastKnownGain, std::move(p_event));
-    }
+  } else if (ReaderPollConfigParser::lastKnownModEvent == EVENT_MOD_F) {
+    // Ignoring all type f related notification's
+    return event_data;
   } else {
     bool invalidData = std::all_of(p_event.begin(), p_event.end(),
                                    [](int i) { return i == 0; });
     if (!invalidData) {
-      event_data = getUnknownEvent(
-          std::move(p_event), std::move(unknownEventTimeStamp), lastKnownGain);
+      event_data =
+          getUnknownEvent(std::move(p_event), std::move(unknownEventTimeStamp),
+                          ReaderPollConfigParser::lastKnownGain);
     }
   }
   return event_data;
@@ -204,34 +208,32 @@ vector<uint8_t> ReaderPollConfigParser::getEvent(vector<uint8_t> p_event,
 
     vector<uint8_t> timestamp = getTimestampInMicroSeconds(p_event);
 
-    lastKnownGain = p_event[INDEX_OF_L2_EVT_GAIN];
+    ReaderPollConfigParser::lastKnownGain = p_event[INDEX_OF_L2_EVT_GAIN];
     switch (p_event[INDEX_OF_L2_EVT_TYPE] & LX_TYPE_MASK) {
       // Trigger Type
       case L2_EVENT_TRIGGER_TYPE:
         // Modulation detected
         switch ((p_event[INDEX_OF_L2_EVT_TYPE] & LX_EVENT_MASK) >> 4) {
           case EVENT_MOD_A:
-            lastKnownModEvent = EVENT_MOD_A;
+            ReaderPollConfigParser::lastKnownModEvent = EVENT_MOD_A;
             if (this->notificationType != TYPE_ONLY_CMA_EVENTS) {
               event_data = getWellKnownModEventData(
-                  TYPE_MOD_A, std::move(timestamp), lastKnownGain);
+                  TYPE_MOD_A, std::move(timestamp),
+                  ReaderPollConfigParser::lastKnownGain);
             }
             break;
 
           case EVENT_MOD_B:
-            lastKnownModEvent = EVENT_MOD_B;
+            ReaderPollConfigParser::lastKnownModEvent = EVENT_MOD_B;
             if (this->notificationType != TYPE_ONLY_CMA_EVENTS) {
               event_data = getWellKnownModEventData(
-                  TYPE_MOD_B, std::move(timestamp), lastKnownGain);
+                  TYPE_MOD_B, std::move(timestamp),
+                  ReaderPollConfigParser::lastKnownGain);
             }
             break;
 
           case EVENT_MOD_F:
-            lastKnownModEvent = EVENT_MOD_F;
-            if (this->notificationType != TYPE_ONLY_CMA_EVENTS) {
-              event_data = getWellKnownModEventData(
-                  TYPE_MOD_F, std::move(timestamp), lastKnownGain);
-            }
+            ReaderPollConfigParser::lastKnownModEvent = EVENT_MOD_F;
             break;
 
           default:
@@ -241,11 +243,13 @@ vector<uint8_t> ReaderPollConfigParser::getEvent(vector<uint8_t> p_event,
 
       case EVENT_RF_ON:
         // External RF Field is ON
-        event_data = getRFEventData(std::move(timestamp), lastKnownGain, true);
+        event_data = getRFEventData(
+            std::move(timestamp), ReaderPollConfigParser::lastKnownGain, true);
         break;
 
       case EVENT_RF_OFF:
-        event_data = getRFEventData(std::move(timestamp), lastKnownGain, false);
+        event_data = getRFEventData(
+            std::move(timestamp), ReaderPollConfigParser::lastKnownGain, false);
         break;
 
       default:
@@ -262,14 +266,16 @@ vector<uint8_t> ReaderPollConfigParser::getEvent(vector<uint8_t> p_event,
           case REQ_A:
             if (this->notificationType != TYPE_ONLY_MOD_EVENTS) {
               event_data = getWellKnownModEventData(
-                  TYPE_MOD_A, std::move(timestamp), lastKnownGain, {REQ_A});
+                  TYPE_MOD_A, std::move(timestamp),
+                  ReaderPollConfigParser::lastKnownGain, {REQ_A});
             }
             break;
 
           case WUP_A:
             if (this->notificationType != TYPE_ONLY_MOD_EVENTS) {
               event_data = getWellKnownModEventData(
-                  TYPE_MOD_A, std::move(timestamp), lastKnownGain, {WUP_A});
+                  TYPE_MOD_A, std::move(timestamp),
+                  ReaderPollConfigParser::lastKnownGain, {WUP_A});
             }
             break;
           default:

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 NXP
+ * Copyright 2024-2025 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ typedef void(reader_poll_info_callback_t)(uint16_t data_len, uint8_t* p_data);
 class ReaderPollConfigParser {
  private:
   reader_poll_info_callback_t* callback = nullptr;
-  uint8_t lastKnownGain = 0x00;
-  uint8_t lastKnownModEvent = 0x00;
+  static uint8_t lastKnownGain;
+  static uint8_t lastKnownModEvent;
 
   /*****************************************************************************
    *
@@ -223,4 +223,17 @@ class ReaderPollConfigParser {
    *
    ****************************************************************************/
   vector<uint8_t> getTimestampInMicroSeconds(vector<uint8_t> rawFrame);
+
+  /*****************************************************************************
+   *
+   * Function         resetLastKnownValues
+   *
+   * Description      This function resets the gain and last know mod type
+   *
+   * Parameters       None
+   *
+   * Returns          void
+   *
+   ****************************************************************************/
+  static void resetLastKnownValues();
 };
