@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "NciDiscoveryCommandBuilder.h"
+#include "ReaderPollConfigParser.h"
 #include "phNxpNciHal_extOperations.h"
 
 using namespace std;
@@ -94,6 +95,7 @@ int handleObserveMode(uint16_t data_len, const uint8_t* p_data) {
 NFCSTATUS deactivateRfDiscovery() {
   if (NciDiscoveryCommandBuilderInstance.isRfDiscoveryCommandReceived()) {
     uint8_t rf_deactivate_cmd[] = {0x21, 0x06, 0x01, 0x00};
+    ReaderPollConfigParser::resetLastKnownValues();
     return phNxpNciHal_send_ext_cmd(sizeof(rf_deactivate_cmd),
                                     rf_deactivate_cmd);
   } else {
